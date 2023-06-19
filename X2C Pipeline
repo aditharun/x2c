@@ -1,0 +1,10 @@
+X2C Pipeline
+
+Go to ~/Downloads/ROSETTA X to C Data and open Jupyter notebook with "jupiter" alias on my mac and Run Genomics_Clinical_Mutations_Counter_cystine_only.ipynb 
+
+Output is a matrix: 
+	Each row is a specific missense mutation from a non-cysteine to cysteine in a given gene, with each column representing a specific ROSETTA histology type
+
+	'All' column represents number of cases with that gene-mutation across all ROSETTA histologies included.
+
+    'Total' row represents the total number of patients included in the database with a given histology (patients with multiple genes mutated are only counted once within the respective study.)
