@@ -77,10 +77,10 @@ mut <- tcga.muts %>% left_join(total %>% select(rosetta, weight.tot, all), by=c(
 gene <- tcga.gene %>% left_join(total %>% select(rosetta, weight.tot, all), by=c("rosetta"="rosetta")) %>% group_by(gene) %>% summarize(pct_us = sum(weight.gene) / sum(weight.tot), pct_tcga = sum(net_count) / unique(all), pct_lb = sum(weight.lb) / sum(weight.tot), pct_ub = sum(weight.ub) / sum(weight.tot) ) %>% mutate(across(where(is.double), ~ . * 100))
 
 
-stable1 <- mut %>% mutate(diff=(pct_us - pct_tcga)) %>% arrange(desc(abs(diff))) %>% mutate(gene = str_sub(gene, 1, -2)) %>% mutate(aa_change = gsub("(.*)\\.", "", hugo)) %>% mutate(mutation = paste0(gene, ".", aa_change)) %>% select(-hugo) %>% relocate(mutation, gene, aa_change, pct_tcga, pct_us, pct_lb, pct_ub, diff) %>% magrittr::set_colnames(c("mutation", "gene", "amino acid change", "TCGA mutation rate (%)", "US population mutation rate (%)", "lower bound mutation rate in US pop (%)", "upper bound mutation rate in US pop (%)", "US - TCGA Mutation Rate"))
+all.muts <- mut %>% mutate(diff=(pct_us - pct_tcga)) %>% arrange(desc(abs(diff))) %>% mutate(gene = str_sub(gene, 1, -2)) %>% mutate(aa_change = gsub("(.*)\\.", "", hugo)) %>% mutate(mutation = paste0(gene, ".", aa_change)) %>% select(-hugo) %>% relocate(mutation, gene, aa_change, pct_tcga, pct_us, pct_lb, pct_ub, diff) %>% magrittr::set_colnames(c("mutation", "gene", "amino acid change", "TCGA mutation rate (%)", "US population mutation rate (%)", "lower bound mutation rate in US pop (%)", "upper bound mutation rate in US pop (%)", "US - TCGA Mutation Rate"))
 
 
-stable2 <- gene %>% mutate(diff=(pct_us - pct_tcga)) %>% arrange(desc(abs(diff))) %>% mutate(gene = str_sub(gene, 1, -2)) %>% relocate(gene, pct_tcga, pct_us, pct_lb, pct_ub) %>% magrittr::set_colnames(c("gene", "TCGA mutation rate (%)", "US population mutation rate (%)", "lower bound mutation rate in US pop (%)", "upper bound mutation rate in US pop (%)", "US - TCGA Mutation Rate"))
+all.genes <- gene %>% mutate(diff=(pct_us - pct_tcga)) %>% arrange(desc(abs(diff))) %>% mutate(gene = str_sub(gene, 1, -2)) %>% relocate(gene, pct_tcga, pct_us, pct_lb, pct_ub) %>% magrittr::set_colnames(c("gene", "TCGA mutation rate (%)", "US population mutation rate (%)", "lower bound mutation rate in US pop (%)", "upper bound mutation rate in US pop (%)", "US - TCGA Mutation Rate"))
 
 
 x2c_points_mut <- mut %>% mutate(diff=abs(pct_tcga - pct_us)) %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% mutate(gene_fix = str_sub(gene, 1, -2), mut_fix = paste0(" (", gsub("(.*)\\.", "", hugo) %>% str_sub(., 1, -4) %>% str_replace(., "([[:alpha:]])(\\d)", "\\1 \\2"), ")")) %>% mutate(label_text = paste0(gene_fix, mut_fix) ) %>% mutate(label = ifelse(us_rank <= 7, label_text, NA)) %>% select(-label_text) %>% filter(!is.na(label)) %>% mutate(position = ifelse(us_rank == 5, "right", "left")) %>% mutate(nx = ifelse(us_rank == 5, -0.02, 0.02)) %>% mutate(ny = ifelse(us_rank == 7, -0.01, 0.02)) %>% mutate(label = ifelse(us_rank == 5, paste0(gene_fix, "\n", mut_fix), label) )
@@ -114,11 +114,11 @@ if (!dir.exists(outdir)){
 	dir.create(outdir)
 }
 
-fig1 <- cowplot::plot_grid(x2c_mut_plot, x2c_mut_bar, nrow = 1, rel_widths = c(1, 2.85))
-ggsave(plot = fig1, filename = file.path(outdir, "fig1.pdf"), device=cairo_pdf, units = "in", height = 7, width = 20)
+mut.estimate.fig <- cowplot::plot_grid(x2c_mut_plot, x2c_mut_bar, nrow = 1, rel_widths = c(1, 2.85))
+ggsave(plot = mut.estimate.fig, filename = file.path(outdir, "mutation-pop-estimates.pdf"), device=cairo_pdf, units = "in", height = 7, width = 20)
 
-fig2 <- cowplot::plot_grid(x2c_gene_plot, x2c_gene_bar, nrow = 1, rel_widths = c(1, 2.85))
-ggsave(plot = fig2, filename = file.path(outdir, "fig2.pdf"), device=cairo_pdf, units = "in", height = 6, width = 20)
+gene.estimate.fig <- cowplot::plot_grid(x2c_gene_plot, x2c_gene_bar, nrow = 1, rel_widths = c(1, 2.85))
+ggsave(plot = gene.estimate.fig, filename = file.path(outdir, "gene-pop-estimates.pdf"), device=cairo_pdf, units = "in", height = 6, width = 20)
 
 
 ######### KRASG12C findings
@@ -134,9 +134,9 @@ ranked_pct_contr <- cancer_contr %>% group_by(hugo) %>% mutate(total = sum(count
 
 t25_mut <- mut %>% mutate(diff=abs(pct_tcga - pct_us)) %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% filter(us_rank <= 25)
 
-table1 <- left_join(ranked_pct_contr, t25_mut %>% select(pct_us, hugo, gene), by=c("hugo"="hugo")) %>% filter(!is.na(pct_us)) %>% select(hugo, cancer, frac, gene, pct_us) %>% mutate(cancer = str_replace_all(cancer, "_", " ")) %>% ungroup() %>% mutate(gene_fix = str_sub(gene, 1, -2), mut_fix = paste0(" (", gsub("(.*)\\.", "", hugo) %>% str_sub(., 1, -4) %>% str_replace(., "([[:alpha:]])(\\d)", "\\1 \\2"), ")")) %>% mutate(label_text = paste0(gene_fix, mut_fix) ) %>% select(-c(gene_fix, gene, mut_fix, hugo)) %>% mutate(indiv_imp = paste0(cancer, " (", round(frac*100, 2), "%)")) %>% select(-c(cancer, frac)) %>% group_by(pct_us, label_text) %>% mutate(row_id = row_number()) %>% pivot_wider(names_from = row_id, values_from = indiv_imp, names_prefix = "V") %>% mutate(cancers = paste0(V1, ", ", V2, ", ", V3)) %>% select(-starts_with("V")) %>% arrange(desc(pct_us)) %>% relocate(label_text) %>% ungroup() %>% magrittr::set_colnames(c("Point Mutation", "Mutation Proportion (%)", "The most common cancers to harbor a mutation in this gene (ROSETTA classification, % of all instances of this mutation)"))
+t25_mut_table <- left_join(ranked_pct_contr, t25_mut %>% select(pct_us, hugo, gene), by=c("hugo"="hugo")) %>% filter(!is.na(pct_us)) %>% select(hugo, cancer, frac, gene, pct_us) %>% mutate(cancer = str_replace_all(cancer, "_", " ")) %>% ungroup() %>% mutate(gene_fix = str_sub(gene, 1, -2), mut_fix = paste0(" (", gsub("(.*)\\.", "", hugo) %>% str_sub(., 1, -4) %>% str_replace(., "([[:alpha:]])(\\d)", "\\1 \\2"), ")")) %>% mutate(label_text = paste0(gene_fix, mut_fix) ) %>% select(-c(gene_fix, gene, mut_fix, hugo)) %>% mutate(indiv_imp = paste0(cancer, " (", round(frac*100, 2), "%)")) %>% select(-c(cancer, frac)) %>% group_by(pct_us, label_text) %>% mutate(row_id = row_number()) %>% pivot_wider(names_from = row_id, values_from = indiv_imp, names_prefix = "V") %>% mutate(cancers = paste0(V1, ", ", V2, ", ", V3)) %>% select(-starts_with("V")) %>% arrange(desc(pct_us)) %>% relocate(label_text) %>% ungroup() %>% magrittr::set_colnames(c("Point Mutation", "Mutation Proportion (%)", "The most common cancers to harbor a mutation in this gene (ROSETTA classification, % of all instances of this mutation)"))
 
-write_csv(table1, file=file.path(outdir, "table1.csv"))
+write_csv(t25_mut_table, file=file.path(outdir, "t25-mutations.csv"))
 
 
 cancer_contr_gene <- tcga.gene %>% select(gene, net_count, rosetta) %>% distinct() %>% left_join(., total %>% select(cancer, count, rosetta) %>% magrittr::set_colnames(c("cancer", "count_cancer", "rosetta")), by=("rosetta"="rosetta"))
@@ -145,9 +145,9 @@ ranked_pct_contr_gene <- cancer_contr_gene %>% group_by(gene) %>% mutate(total =
 
 t25_gene <- gene %>% mutate(diff=abs(pct_tcga - pct_us)) %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% filter(us_rank <= 25)
 
-table2 <- left_join(ranked_pct_contr_gene, t25_gene %>% select(pct_us, gene), by=c("gene"="gene")) %>% filter(!is.na(pct_us)) %>% select(cancer, frac, gene, pct_us) %>% mutate(cancer = str_replace_all(cancer, "_", " ")) %>% ungroup() %>% mutate(gene = str_sub(gene, 1, -2)) %>% mutate(indiv_imp = paste0(cancer, " (", round(frac*100, 2), "%)")) %>% select(-c(cancer, frac)) %>% group_by(pct_us, gene) %>% mutate(row_id = row_number()) %>% pivot_wider(names_from = row_id, values_from = indiv_imp, names_prefix = "V") %>% mutate(cancers = paste0(V1, ", ", V2, ", ", V3)) %>% select(-starts_with("V")) %>% arrange(desc(pct_us)) %>% relocate(gene) %>% ungroup() %>% magrittr::set_colnames(c("Point Mutation", "Mutation Proportion (%)", "The most common cancers to harbor a mutation in this gene (ROSETTA classification, % of all instances of this mutation)"))
+t25_gene_table <- left_join(ranked_pct_contr_gene, t25_gene %>% select(pct_us, gene), by=c("gene"="gene")) %>% filter(!is.na(pct_us)) %>% select(cancer, frac, gene, pct_us) %>% mutate(cancer = str_replace_all(cancer, "_", " ")) %>% ungroup() %>% mutate(gene = str_sub(gene, 1, -2)) %>% mutate(indiv_imp = paste0(cancer, " (", round(frac*100, 2), "%)")) %>% select(-c(cancer, frac)) %>% group_by(pct_us, gene) %>% mutate(row_id = row_number()) %>% pivot_wider(names_from = row_id, values_from = indiv_imp, names_prefix = "V") %>% mutate(cancers = paste0(V1, ", ", V2, ", ", V3)) %>% select(-starts_with("V")) %>% arrange(desc(pct_us)) %>% relocate(gene) %>% ungroup() %>% magrittr::set_colnames(c("Point Mutation", "Mutation Proportion (%)", "The most common cancers to harbor a mutation in this gene (ROSETTA classification, % of all instances of this mutation)"))
 
-write_csv(table2, file=file.path(outdir, "table2.csv"))
+write_csv(t25_gene_table, file=file.path(outdir, "t25-genes.csv"))
 
 
 
@@ -189,7 +189,7 @@ by_cancer <- tcga.gene %>% select(rosetta, net_count, gene) %>% left_join(., tot
 muts_by_cancer <- by_cancer %>% rename_rosetta(.) %>% mutate(s_per = s / cancer_count) %>% mutate(s_per = round(s_per, 2)) %>% mutate(cancer = factor(cancer, levels = cancer[order(s_per, decreasing=FALSE)])) %>% ggplot(aes(y=cancer, x=s_per, label=s)) + geom_col(position = position_dodge(width = 7), color="grey60", alpha = 0.8, fill = "grey60") + theme_minimal() + theme(panel.border = element_rect(color="black", fill="transparent"), panel.grid = element_blank()) + xlab("# of X2C Mutations per Sequenced TCGA Cancer Sample") + ylab("") + theme(axis.ticks = element_line(color="black")) + geom_text(aes(x=s_per + 0.5, y = cancer), hjust = 0) + scale_x_continuous(limits = c(0, 62), breaks = seq(0, 60, 10)) + geom_vline(xintercept = seq(10,60,10), linetype="dashed", alpha = 0.85, color="grey70") + theme(axis.title = element_text(size = 16))
 
 
-stable3 <- by_cancer %>% rename_rosetta(.) %>% mutate(s_per = s / cancer_count) %>% mutate(s_per = round(s_per, 2)) %>% mutate(cancer = factor(cancer, levels = cancer[order(s_per, decreasing=FALSE)])) %>% magrittr::set_colnames(c("Cancer", "Total X2C Mutations", "# of TCGA Samples Sequenced", "X2C Mutations per Sample Sequenced"))
+by.cancer <- by_cancer %>% rename_rosetta(.) %>% mutate(s_per = s / cancer_count) %>% mutate(s_per = round(s_per, 2)) %>% mutate(cancer = factor(cancer, levels = cancer[order(s_per, decreasing=FALSE)])) %>% magrittr::set_colnames(c("Cancer", "Total X2C Mutations", "# of TCGA Samples Sequenced", "X2C Mutations per Sample Sequenced"))
 
 ## amino acid analyses 
 
@@ -206,15 +206,15 @@ aa_cancer <- aa %>% group_by(cancer, aminoacid) %>% summarize(tc = sum(count)) %
 
 
 
-fig3 <- cowplot::plot_grid(muts_by_cancer, hmap, aa_cancer, nrow = 1, rel_widths = c(1, 1.25, 1), labels=c("A", "B", "C"), label_size = 22)
+mut.burden.fig <- cowplot::plot_grid(muts_by_cancer, hmap, aa_cancer, nrow = 1, rel_widths = c(1, 1.25, 1), labels=c("A", "B", "C"), label_size = 22)
 
-ggsave(filename = file.path(outdir, "fig3.pdf"), plot = fig3, device = cairo_pdf, height = 12, width = 32, units = "in")
-
-
-stable4 <- aa %>% group_by(cancer, aminoacid) %>% summarize(tc = sum(count)) %>% ungroup() %>% mutate(aminoacid = factor(aminoacid, levels=aa_levels)) %>% arrange(desc(tc)) %>% magrittr::set_colnames(c("Cancer", "Amino Acid Mutated to Cysteine", "Total Number of Mutations in TCGA"))
+ggsave(filename = file.path(outdir, "mutation-burden-figure.pdf"), plot = mut.burden.fig, device = cairo_pdf, height = 12, width = 32, units = "in")
 
 
-writexl::write_xlsx(list(S1 = stable1, S2 = stable2, S3 = stable3, S4 = stable4), file.path(outdir, "supplementary-tables.xlsx"))
+aa.transitions <- aa %>% group_by(cancer, aminoacid) %>% summarize(tc = sum(count)) %>% ungroup() %>% mutate(aminoacid = factor(aminoacid, levels=aa_levels)) %>% arrange(desc(tc)) %>% magrittr::set_colnames(c("Cancer", "Amino Acid Mutated to Cysteine", "Total Number of Mutations in TCGA"))
+
+
+writexl::write_xlsx(list(S1 = all.muts, S2 = all.genes, S3 = by.cancer, S4 = aa.transitions), file.path(outdir, "supplementary-tables.xlsx"))
 
 
 
