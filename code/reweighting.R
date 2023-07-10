@@ -1,6 +1,8 @@
 library(tidyverse)
 library(readxl)
 
+set.seed(123)
+
 tcga <- "../data/processed-data/Genomics_Output_Processed_specific_Cys.txt" %>% read_table()
 tcga_total_by_rosetta <- tcga %>% filter(Hugo_Symbol == "Total")
 tcga_total_by_mut <- tcga %>% select(All)
@@ -77,23 +79,30 @@ mut <- tcga.muts %>% left_join(total %>% select(rosetta, weight.tot, all), by=c(
 gene <- tcga.gene %>% left_join(total %>% select(rosetta, weight.tot, all), by=c("rosetta"="rosetta")) %>% group_by(gene) %>% summarize(pct_us = sum(weight.gene) / sum(weight.tot), pct_tcga = sum(net_count) / unique(all), pct_lb = sum(weight.lb) / sum(weight.tot), pct_ub = sum(weight.ub) / sum(weight.tot) ) %>% mutate(across(where(is.double), ~ . * 100))
 
 
-all.muts <- mut %>% mutate(diff=(pct_us - pct_tcga)) %>% arrange(desc(abs(diff))) %>% mutate(gene = str_sub(gene, 1, -2)) %>% mutate(aa_change = gsub("(.*)\\.", "", hugo)) %>% mutate(mutation = paste0(gene, ".", aa_change)) %>% select(-hugo) %>% relocate(mutation, gene, aa_change, pct_tcga, pct_us, pct_lb, pct_ub, diff) %>% magrittr::set_colnames(c("mutation", "gene", "amino acid change", "TCGA mutation rate (%)", "US population mutation rate (%)", "lower bound mutation rate in US pop (%)", "upper bound mutation rate in US pop (%)", "US - TCGA Mutation Rate"))
+all.muts <- mut %>% mutate(diff=(pct_us - pct_tcga)) %>% arrange(desc(abs(diff))) %>% mutate(gene = str_sub(gene, 1, -2)) %>% mutate(aa_change = gsub("(.*)\\.", "", hugo)) %>% mutate(mutation = paste0(gene, ".", aa_change)) %>% select(-hugo) %>% relocate(mutation, gene, aa_change, pct_tcga, pct_us, pct_lb, pct_ub, diff) %>% magrittr::set_colnames(c("mutation", "gene", "amino acid change", "Unweighted pan-cancer mutation rate (%)", "US population mutation rate (%)", "lower bound mutation rate in US pop (%)", "upper bound mutation rate in US pop (%)", "US - Unweighted pan-cancer Mutation Rate"))
 
 
-all.genes <- gene %>% mutate(diff=(pct_us - pct_tcga)) %>% arrange(desc(abs(diff))) %>% mutate(gene = str_sub(gene, 1, -2)) %>% relocate(gene, pct_tcga, pct_us, pct_lb, pct_ub) %>% magrittr::set_colnames(c("gene", "TCGA mutation rate (%)", "US population mutation rate (%)", "lower bound mutation rate in US pop (%)", "upper bound mutation rate in US pop (%)", "US - TCGA Mutation Rate"))
+all.genes <- gene %>% mutate(diff=(pct_us - pct_tcga)) %>% arrange(desc(abs(diff))) %>% mutate(gene = str_sub(gene, 1, -2)) %>% relocate(gene, pct_tcga, pct_us, pct_lb, pct_ub) %>% magrittr::set_colnames(c("gene", "Unweighted pan-cancer mutation rate (%)", "US population mutation rate (%)", "lower bound mutation rate in US pop (%)", "upper bound mutation rate in US pop (%)", "US - Unweighted pan-cancer Mutation Rate"))
 
 
-x2c_points_mut <- mut %>% mutate(diff=abs(pct_tcga - pct_us)) %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% mutate(gene_fix = str_sub(gene, 1, -2), mut_fix = paste0(" (", gsub("(.*)\\.", "", hugo) %>% str_sub(., 1, -4) %>% str_replace(., "([[:alpha:]])(\\d)", "\\1 \\2"), ")")) %>% mutate(label_text = paste0(gene_fix, mut_fix) ) %>% mutate(label = ifelse(us_rank <= 7, label_text, NA)) %>% select(-label_text) %>% filter(!is.na(label)) %>% mutate(position = ifelse(us_rank == 5, "right", "left")) %>% mutate(nx = ifelse(us_rank == 5, -0.02, 0.02)) %>% mutate(ny = ifelse(us_rank == 7, -0.01, 0.02)) %>% mutate(label = ifelse(us_rank == 5, paste0(gene_fix, "\n", mut_fix), label) )
+x2c_points_mut <- mut %>% mutate(diff=abs(pct_tcga - pct_us)) %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% mutate(gene_fix = str_sub(gene, 1, -2), mut_fix = paste0(" (", gsub("(.*)\\.", "", hugo) %>% str_sub(., 1, -4) %>% str_replace(., "([[:alpha:]])(\\d)", "\\1 \\2"), ")")) %>% mutate(label_text = paste0(gene_fix, mut_fix) ) %>% mutate(label = ifelse(us_rank <= 7, label_text, NA)) %>% select(-label_text) %>% filter(!is.na(label)) %>% mutate(position = ifelse(us_rank == 5, "right", "left")) %>% mutate(nx = ifelse(us_rank == 5, -0.02, 0.02)) %>% mutate(ny = ifelse(us_rank == 7, -0.01, 0.02)) %>% mutate(label = ifelse(us_rank == 5, paste0(gene_fix, "\n", mut_fix), label) ) 
 
-x2c_mut_plot <- mut %>% ggplot(aes(x=pct_tcga, y=pct_us)) + geom_point(alpha=0.8, size=1.75, color="black") + theme_minimal() + geom_abline(color="grey70", size=1, alpha=0.8, linetype="dashed", slope = 1, intercept = 0) + theme(panel.grid = element_blank(), panel.border = element_rect(color="black", fill="transparent")) + scale_x_continuous(limits=c(0,2), breaks=seq(0, 2, 0.5)) + scale_y_continuous(limits=c(0,2), breaks=seq(0, 2, 0.5)) + ylab("Estimated Mutation Proportion\nfor U.S. Population (%)") + xlab("Proportion of TCGA Samples (%)") + theme(axis.title=element_text(size=16), axis.text=element_text(size=14), axis.ticks=element_line(color="black")) + geom_text(data=x2c_points_mut, mapping=aes(x=pct_tcga+nx, y=pct_us+ny, label=label, hjust = position), lineheight = 0.65)
+x2c_mut_plot <- mut %>% ggplot(aes(x=pct_tcga, y=pct_us)) + geom_point(alpha=0.8, size=1.75, color="black") + theme_minimal() + geom_abline(color="grey70", size=1, alpha=0.8, linetype="dashed", slope = 1, intercept = 0) + theme(panel.grid = element_blank(), panel.border = element_rect(color="black", fill="transparent")) + scale_x_continuous(limits=c(0,2), breaks=seq(0, 2, 0.5)) + scale_y_continuous(limits=c(0,2), breaks=seq(0, 2, 0.5)) + ylab("Estimated Mutation Proportion\nfor U.S. Population (%)") + xlab("Proportion of Unweighted Pan-Cancer Samples (%)") + theme(axis.title=element_text(size=16), axis.text=element_text(size=14), axis.ticks=element_line(color="black")) + geom_text(data=x2c_points_mut, mapping=aes(x=pct_tcga+nx, y=pct_us+ny, label=label, hjust = position), lineheight = 0.65)
 
+
+#log-log plot mutation
+x2c_points_mut_log_log <- x2c_points_mut %>% mutate(ny = ifelse(gene_fix == "FGFR3", ny + 0.02, ny))
+x2c_mut_log_plot <- mut %>% ggplot(aes(x=log(pct_tcga), y=log(pct_us))) + geom_point(alpha=0.8, size=1.75, color="black") + theme_minimal() + geom_abline(color="grey70", size=1, alpha=0.8, linetype="dashed", slope = 1, intercept = 0) + theme(panel.grid = element_blank(), panel.border = element_rect(color="black", fill="transparent")) + ylab("Log Estimated Mutation Proportion\nfor U.S. Population (log %)") + xlab("Log Proportion\nof Unweighted Pan-Cancer Samples (log %)") + theme(axis.title=element_text(size=16), axis.text=element_text(size=14), axis.ticks=element_line(color="black")) + geom_text(data=x2c_points_mut_log_log, mapping=aes(x=log(pct_tcga+nx), y=log(pct_us+ny), label=label, hjust = position), lineheight = 0.65) + geom_vline(xintercept = c(log(1), log(0.5)), color = "grey60", linetype = "dotted", size = 0.65) +  geom_hline(yintercept = c(log(1), log(0.5)), color = "grey60", linetype = "dotted", size = 0.65)  + scale_x_continuous(limits = c(-5, 1.5), breaks = scales::pretty_breaks(n = 8)) + scale_y_continuous(limits = c(-16, 1), breaks = scales::pretty_breaks(n = 8)) + geom_text(data = data.frame(x=c(log(1), log(0.5), -5, -5), y = c(-16, -16, log(1), log(0.5)), label = c("1%", "0.5%", "1%", "0.5%")), mapping = aes(x = x, y = y, label = label))
 
 
 x2c_points_gene <- gene %>% mutate(diff=abs(pct_tcga - pct_us)) %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% mutate(label = ifelse(us_rank <= 3, str_sub(gene, 1, -2), NA)) %>% filter(!is.na(label)) %>% mutate(nx = 0.05) %>% mutate(ny = 0.03)
 
 
-x2c_gene_plot <- gene %>% ggplot(aes(x=pct_tcga, y=pct_us)) + geom_point(alpha=0.8, size=1.75, color="black") + theme_minimal() + geom_abline(color="grey70", size=1, alpha=0.8, linetype="dashed", slope = 1, intercept = 0) + theme(panel.grid = element_blank(), panel.border = element_rect(color="black", fill="transparent")) + scale_x_continuous(limits=c(0,5), breaks=seq(0, 5, 1)) + scale_y_continuous(limits=c(0,5), breaks=seq(0, 5, 1)) + ylab("Estimated Mutation Proportion\nfor U.S. Population (%)") + xlab("Proportion of TCGA Samples (%)") + theme(axis.title=element_text(size=16), axis.text=element_text(size=14), axis.ticks=element_line(color="black")) + geom_text(data=x2c_points_gene, mapping=aes(x=pct_tcga+nx, y=pct_us+ny, label=label), hjust=0)
+x2c_gene_plot <- gene %>% ggplot(aes(x=pct_tcga, y=pct_us)) + geom_point(alpha=0.8, size=1.75, color="black") + theme_minimal() + geom_abline(color="grey70", size=1, alpha=0.8, linetype="dashed", slope = 1, intercept = 0) + theme(panel.grid = element_blank(), panel.border = element_rect(color="black", fill="transparent")) + scale_x_continuous(limits=c(0,5), breaks=seq(0, 5, 1)) + scale_y_continuous(limits=c(0,5), breaks=seq(0, 5, 1)) + ylab("Estimated Mutation Proportion\nfor U.S. Population (%)") + xlab("Proportion of Unweighted Pan-Cancer Samples (%)") + theme(axis.title=element_text(size=16), axis.text=element_text(size=14), axis.ticks=element_line(color="black")) + geom_text(data=x2c_points_gene, mapping=aes(x=pct_tcga+nx, y=pct_us+ny, label=label), hjust=0)
 
+#log-log plot gene
+x2c_points_gene_log_log <- x2c_points_gene %>% mutate(ny = ifelse(gene == "TTNp", ny + 1, ny)) %>% mutate(ny = ifelse(gene == "TP53p", ny - 0.5, ny)) %>% mutate(nx = ifelse(gene == "KRASp", nx + 0.1, nx))
+x2c_gene_log_plot <- gene %>% ggplot(aes(x=log(pct_tcga), y=log(pct_us))) + geom_point(alpha=0.8, size=1.75, color="black") + theme_minimal() + geom_abline(color="grey70", size=1, alpha=0.8, linetype="dashed", slope = 1, intercept = 0) + theme(panel.grid = element_blank(), panel.border = element_rect(color="black", fill="transparent")) + ylab("Log Estimated Mutation Proportion\nfor U.S. Population (log %)") + xlab("Log Proportion of Unweighted\nPan-Cancer Samples (log %)") + theme(axis.title=element_text(size=16), axis.text=element_text(size=14), axis.ticks=element_line(color="black")) + geom_text(data=x2c_points_gene_log_log, mapping=aes(x=log(pct_tcga+nx), y=log(pct_us+ny), label=label),  hjust = 0) + geom_vline(xintercept = c(log(1), log(5), log(2)), color = "grey60", linetype = "dotted", size = 0.65) +  geom_hline(yintercept = c(log(1), log(5), log(2)), color = "grey60", linetype = "dotted", size = 0.65)  + scale_x_continuous(limits = c(-5, 2), breaks = scales::pretty_breaks(n = 8)) + scale_y_continuous(limits = c(-14, 2), breaks = scales::pretty_breaks(n = 8)) + geom_text(data = data.frame(x=c(log(1), log(5), -5, -5, -5, log(2)), y = c(-12, -12, log(1), log(5), log(2), -12), label = c("1%", "5%", "1%", "5%", "2%", "2%")), mapping = aes(x = x, y = y, label = label))
 
 mut.bar <- mut %>% arrange(desc(pct_tcga)) %>% slice(1:50) 
 mut.bar <- mut.bar %>% mutate(label_text = paste0(str_sub(gene, 1, -2), " (", gsub("(.*)\\.", "", hugo) %>% str_sub(., 1, -4) %>% str_replace(., "([[:alpha:]])(\\d)", "\\1 \\2"), ")"))
@@ -114,16 +123,45 @@ if (!dir.exists(outdir)){
 	dir.create(outdir)
 }
 
-mut.estimate.fig <- cowplot::plot_grid(x2c_mut_plot, x2c_mut_bar, nrow = 1, rel_widths = c(1, 2.85))
-ggsave(plot = mut.estimate.fig, filename = file.path(outdir, "mutation-pop-estimates.pdf"), device=cairo_pdf, units = "in", height = 7, width = 20)
+#mut.estimate.fig <- cowplot::plot_grid(x2c_mut_plot, x2c_mut_bar, nrow = 1, rel_widths = c(1, 2.85))
+#ggsave(plot = mut.estimate.fig, filename = file.path(outdir, "mutation-pop-estimates.pdf"), device=cairo_pdf, units = "in", height = 7, width = 20)
 
-gene.estimate.fig <- cowplot::plot_grid(x2c_gene_plot, x2c_gene_bar, nrow = 1, rel_widths = c(1, 2.85))
-ggsave(plot = gene.estimate.fig, filename = file.path(outdir, "gene-pop-estimates.pdf"), device=cairo_pdf, units = "in", height = 6, width = 20)
+#gene.estimate.fig <- cowplot::plot_grid(x2c_gene_plot, x2c_gene_bar, nrow = 1, rel_widths = c(1, 2.85))
+#ggsave(plot = gene.estimate.fig, filename = file.path(outdir, "gene-pop-estimates.pdf"), device=cairo_pdf, units = "in", height = 6, width = 20)
 
+ggsave(plot = x2c_mut_plot, filename = file.path(outdir, "mutation-scatterplot.pdf"), device = cairo_pdf, units = "in", height = 7, width = 7)
+ggsave(plot = x2c_mut_bar, filename = file.path(outdir, "mutation-bar.pdf"), device = cairo_pdf, units = "in", height = 7, width = 15)
+ggsave(plot = x2c_mut_log_plot, filename = file.path(outdir, "mutation-log-scatterplot.pdf"), units = "in", height = 7, width = 7)
+
+ggsave(plot = x2c_gene_plot, filename = file.path(outdir, "gene-scatterplot.pdf"), device = cairo_pdf, units = "in", height = 7, width = 7)
+ggsave(plot = x2c_gene_bar, filename = file.path(outdir, "gene-bar.pdf"), device = cairo_pdf, units = "in", height = 7, width = 15)
+ggsave(plot = x2c_gene_log_plot, filename = file.path(outdir, "gene-log-scatterplot.pdf"), units = "in", height = 7, width = 7)
+
+
+a_cor <- mut %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% arrange(desc(pct_tcga)) %>% mutate(tcga_rank = 1:n()) %>% filter(us_rank <= 25) %>% ggplot(aes(x=us_rank, y = tcga_rank)) + geom_point(size = 2.5) + theme_minimal() + theme(panel.background =  element_blank(), panel.grid = element_blank(), panel.border = element_rect(color = "black", fill = "transparent")) + theme(axis.text = element_text(size = 14), axis.title = element_text(size = 18), plot.title = element_text(size = 18, hjust = 0.5), axis.ticks = element_line(color = "grey60")) + scale_x_continuous(breaks = scales::pretty_breaks(n = 8)) + scale_y_continuous(breaks = scales::pretty_breaks(n = 8)) + xlab("Epidemio-Genomic Rank") + ylab("Unweighted Pan-Cancer Rank") + ggtitle("Top 25 Acquired Cysteine Mutations")  
+
+b_cor <- mut %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% arrange(desc(pct_tcga)) %>% mutate(tcga_rank = 1:n()) %>% filter(us_rank <= 100) %>% ggplot(aes(x=us_rank, y = tcga_rank)) + geom_point(size = 2.5) + theme_minimal() + theme(panel.background =  element_blank(), panel.grid = element_blank(), panel.border = element_rect(color = "black", fill = "transparent")) + theme(axis.text = element_text(size = 14), axis.title = element_text(size = 18), plot.title = element_text(size = 18, hjust = 0.5), axis.ticks = element_line(color = "grey60")) + scale_x_continuous(breaks = scales::pretty_breaks(n = 8)) + scale_y_continuous(breaks = scales::pretty_breaks(n = 8)) + xlab("Epidemio-Genomic Rank") + ylab("Unweighted Pan-Cancer Rank") + ggtitle("Top 100 Acquired Cysteine Mutations")  
+
+
+c_cor <- mut %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% arrange(desc(pct_tcga)) %>% mutate(tcga_rank = 1:n()) %>% filter(us_rank <= 1000) %>% ggplot(aes(x=us_rank, y = tcga_rank)) + geom_point(size = 2.5) + theme_minimal() + theme(panel.background =  element_blank(), panel.grid = element_blank(), panel.border = element_rect(color = "black", fill = "transparent")) + theme(axis.text = element_text(size = 14), axis.title = element_text(size = 18), plot.title = element_text(size = 18, hjust = 0.5), axis.ticks = element_line(color = "grey60")) + scale_x_continuous(breaks = scales::pretty_breaks(n = 8)) + scale_y_continuous(breaks = scales::pretty_breaks(n = 8)) + xlab("Epidemio-Genomic Rank") + ylab("Unweighted Pan-Cancer Rank") + ggtitle("Top 1000 Acquired Cysteine Mutations")  
+
+cowplot::plot_grid(a_cor, b_cor, c_cor, nrow = 1, labels = c("A", "B", "C"), label_size = 25) %>% ggsave(plot = ., filename = file.path(outdir, "rank-correlation.pdf"), device = cairo_pdf, units = "in", height = 6, width = 18)
+ 
+get_correlation <- function(df, n.cysteine){
+
+	x <- df %>% arrange(desc(pct_us)) %>% mutate(us_rank = 1:n()) %>% arrange(desc(pct_tcga)) %>% mutate(tcga_rank = 1:n()) %>% filter(us_rank <= n.cysteine)
+
+	ctest <- cor.test(x$us_rank, x$tcga_rank, method="pearson")
+
+	list(n = n.cysteine, cor = ctest$estimate[["cor"]], p = ctest$p.value)
+}
+get_correlation(mut, 25)
+get_correlation(mut, 100)
+get_correlation(mut, 1000)
 
 ######### KRASG12C findings
 
-mut %>% filter((grepl("RASp", gene)|grepl("GNASp", gene))) %>% select(hugo, gene, pct_us, pct_tcga) %>% mutate(total_pts = pct_us * 0.01 * 1958310) %>% arrange(desc(total_pts)) %>% magrittr::set_colnames(c("mutation", "gene", "pct_us", "pct_tcga", "total_pts")) %>% write_csv(., file = file.path(outdir, "RAS-mutations.csv"))
+mut %>% filter((grepl("RASp", gene)|grepl("GNASp", gene))) %>% select(hugo, gene, pct_us, pct_tcga) %>% mutate(total_pts = pct_us * 0.01 * 1958310) %>% arrange(desc(total_pts)) %>% magrittr::set_colnames(c("mutation", "gene", "pct_us", "pct_unweighted_pan_cancer", "total_pts")) %>% write_csv(., file = file.path(outdir, "RAS-mutations.csv"))
 
 
 ########## Tables 1 and 2
@@ -179,17 +217,17 @@ cancerlevels <- hmap_tcga %>% group_by(cancer) %>% summarize(tc = sum(net_count)
 #top 50 genes by number of total mutations  and top 20 cancers by number of total mutations
 hmap_tcga <- hmap_tcga %>% filter(gene %in% genelevels[1:50]) %>% filter(cancer %in% cancerlevels[1:20])
 
-hmap <- hmap_tcga %>% mutate(gene = factor(gene, levels=genelevels), cancer = factor(cancer, levels=cancerlevels)) %>% ggplot(aes(x=gene, y=cancer, fill=net_count)) + geom_tile(color="black") + scale_fill_gradient2(name = "No. of TCGA Samples\nwith X2C Mutations", low = "black", mid = "grey80", high = colors[length(colors)], limits = c(0,120), guide = "colorbar", na.value = "grey80", breaks = seq(0, 120, 15)) + theme(panel.border = element_rect(color="transparent", fill='transparent'), panel.grid = element_blank()) + ylab("Top 20 Mutated Cancers") + xlab("Top 50 Mutated Genes") + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.2)) + theme(axis.title = element_text(size = 16))
+hmap <- hmap_tcga %>% mutate(gene = factor(gene, levels=genelevels), cancer = factor(cancer, levels=cancerlevels)) %>% ggplot(aes(x=gene, y=cancer, fill=net_count)) + geom_tile(color="black") + scale_fill_gradient2(name = "No. of Unweighted Pan-Cancer\nSamples with X2C Mutations", low = "black", mid = "grey80", high = colors[length(colors)], limits = c(0,120), guide = "colorbar", na.value = "grey80", breaks = seq(0, 120, 15)) + theme(panel.border = element_rect(color="transparent", fill='transparent'), panel.grid = element_blank()) + ylab("Top 20 Mutated Cancers") + xlab("Top 50 Mutated Genes") + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.2)) + theme(axis.title = element_text(size = 16))
 
 
 by_cancer <- tcga.gene %>% select(rosetta, net_count, gene) %>% left_join(., total %>% select(rosetta, count, cancer), by=c("rosetta"="rosetta")) %>% select(-rosetta) %>% filter(net_count > 0) %>% group_by(cancer) %>% summarize(s = sum(net_count), cancer_count = unique(count)) 
 
 #throw out less than 1% (14398*0.01)
 
-muts_by_cancer <- by_cancer %>% rename_rosetta(.) %>% mutate(s_per = s / cancer_count) %>% mutate(s_per = round(s_per, 2)) %>% mutate(cancer = factor(cancer, levels = cancer[order(s_per, decreasing=FALSE)])) %>% ggplot(aes(y=cancer, x=s_per, label=s)) + geom_col(position = position_dodge(width = 7), color="grey60", alpha = 0.8, fill = "grey60") + theme_minimal() + theme(panel.border = element_rect(color="black", fill="transparent"), panel.grid = element_blank()) + xlab("# of X2C Mutations per Sequenced TCGA Cancer Sample") + ylab("") + theme(axis.ticks = element_line(color="black")) + geom_text(aes(x=s_per + 0.5, y = cancer), hjust = 0) + scale_x_continuous(limits = c(0, 62), breaks = seq(0, 60, 10)) + geom_vline(xintercept = seq(10,60,10), linetype="dashed", alpha = 0.85, color="grey70") + theme(axis.title = element_text(size = 16))
+muts_by_cancer <- by_cancer %>% rename_rosetta(.) %>% mutate(s_per = s / cancer_count) %>% mutate(s_per = round(s_per, 2)) %>% mutate(cancer = factor(cancer, levels = cancer[order(s_per, decreasing=FALSE)])) %>% ggplot(aes(y=cancer, x=s_per, label=s)) + geom_col(position = position_dodge(width = 7), color="grey60", alpha = 0.8, fill = "grey60") + theme_minimal() + theme(panel.border = element_rect(color="black", fill="transparent"), panel.grid = element_blank()) + xlab("# of X2C Mutations per Unweighted Pan-Cancer Sample") + ylab("") + theme(axis.ticks = element_line(color="black")) + geom_text(aes(x=s_per + 0.5, y = cancer), hjust = 0) + scale_x_continuous(limits = c(0, 62), breaks = seq(0, 60, 10)) + geom_vline(xintercept = seq(10,60,10), linetype="dashed", alpha = 0.85, color="grey70") + theme(axis.title = element_text(size = 16))
 
 
-by.cancer <- by_cancer %>% rename_rosetta(.) %>% mutate(s_per = s / cancer_count) %>% mutate(s_per = round(s_per, 2)) %>% mutate(cancer = factor(cancer, levels = cancer[order(s_per, decreasing=FALSE)])) %>% magrittr::set_colnames(c("Cancer", "Total X2C Mutations", "# of TCGA Samples Sequenced", "X2C Mutations per Sample Sequenced"))
+by.cancer <- by_cancer %>% rename_rosetta(.) %>% mutate(s_per = s / cancer_count) %>% mutate(s_per = round(s_per, 2)) %>% mutate(cancer = factor(cancer, levels = cancer[order(s_per, decreasing=FALSE)])) %>% magrittr::set_colnames(c("Cancer", "Total X2C Mutations", "# of Pan-Cancer Samples Sequenced", "X2C Mutations per Sample Sequenced"))
 
 ## amino acid analyses 
 
@@ -211,7 +249,7 @@ mut.burden.fig <- cowplot::plot_grid(muts_by_cancer, hmap, aa_cancer, nrow = 1, 
 ggsave(filename = file.path(outdir, "mutation-burden-figure.pdf"), plot = mut.burden.fig, device = cairo_pdf, height = 12, width = 32, units = "in")
 
 
-aa.transitions <- aa %>% group_by(cancer, aminoacid) %>% summarize(tc = sum(count)) %>% ungroup() %>% mutate(aminoacid = factor(aminoacid, levels=aa_levels)) %>% arrange(desc(tc)) %>% magrittr::set_colnames(c("Cancer", "Amino Acid Mutated to Cysteine", "Total Number of Mutations in TCGA"))
+aa.transitions <- aa %>% group_by(cancer, aminoacid) %>% summarize(tc = sum(count)) %>% ungroup() %>% mutate(aminoacid = factor(aminoacid, levels=aa_levels)) %>% arrange(desc(tc)) %>% magrittr::set_colnames(c("Cancer", "Amino Acid Mutated to Cysteine", "Total Number of Mutations in Pan-Cancer Samples"))
 
 
 writexl::write_xlsx(list(S1 = all.muts, S2 = all.genes, S3 = by.cancer, S4 = aa.transitions), file.path(outdir, "supplementary-tables.xlsx"))
