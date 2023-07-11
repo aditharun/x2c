@@ -3,11 +3,35 @@ library(readxl)
 
 set.seed(123)
 
+outdir <- "../results"
+if (!dir.exists(outdir)){
+	dir.create(outdir)
+}
+
 tcga <- "../data/processed-data/Genomics_Output_Processed_specific_Cys.txt" %>% read_table()
+
+#taken from supplementary material of stites 2021
+denominator <- "../data/processed-data/Genomics_Output_Processed.txt" %>% read_table() %>% filter(Hugo_Symbol == "Total")
+
+denom <- denominator %>% select(intersect(colnames(denominator), colnames(tcga))) %>% relocate(colnames(tcga))
+
+#the total number of cases with at least 1 X2C mutation
+total_cases <- tcga %>% filter(Hugo_Symbol == "Total")
+
+
+#the total number of cases sequenced in all
+tcga <- rbind(tcga %>% filter(Hugo_Symbol != "Total"), denom)
+
 tcga_total_by_rosetta <- tcga %>% filter(Hugo_Symbol == "Total")
 tcga_total_by_mut <- tcga %>% select(All)
 
 tcga.df <- tcga %>% filter(Hugo_Symbol != "Total") %>% select(-All)
+
+total_cases$Hugo_Symbol <- "cases with >= 1 acquired cysteine"
+denom$Hugo_Symbol <- "total sequenced cases"
+colnames(denom)[1] <- "status"
+colnames(total_cases)[1] <- "status"
+rbind(total_cases, denom) %>% as_tibble() %>% writexl::write_xlsx(., file.path(outdir, "cases-by-rosetta.xlsx"))
 
 
 seer.df <- "../data/processed-data/SuppTable1_ROSETTA_Abundance_added12.xlsx" %>% read_excel() %>% magrittr::set_colnames(c("rosetta", "cancer", "incidence")) %>% mutate(incidence_frac = incidence / 100)
@@ -118,10 +142,7 @@ gene.bar$label_text <- factor(gene.bar$label_text, levels = gene.bar$label_text[
 
 x2c_gene_bar <- gene.bar %>% ggplot(aes(x=label_text, y=pct_us)) + geom_bar(position = position_dodge(width = 5), stat="identity",color="grey50", fill="grey50", alpha = 0.75) + theme_minimal() + theme(panel.grid = element_blank(), panel.border = element_rect(color="black", fill="transparent")) + geom_hline(yintercept = c(1,2,3,4), linetype="dashed", color="grey60") + scale_y_continuous(name = "Estimated Mutation Proportion\nfor U.S. Population (%)", limits=c(0,4.5), breaks=seq(0,4,1), sec.axis = sec_axis(~ . * 0.01 * 1958310, name = "Estimated Number of New Cases In 2023\nWith X2C Mutation In U.S.", breaks = seq(0, 80000, 80000/8))) + theme(axis.ticks.y = element_line(color="black")) + xlab("Top 50 Mutated Genes") + theme(axis.title = element_text(size=18), axis.text.y = element_text(size = 16), axis.text.x = element_text(size = 14, angle = 90, hjust = 1)) + geom_hline(yintercept = 10000/(0.01 * 1958310), color="grey60", linetype = "dashed")
 
-outdir <- "../results"
-if (!dir.exists(outdir)){
-	dir.create(outdir)
-}
+
 
 #mut.estimate.fig <- cowplot::plot_grid(x2c_mut_plot, x2c_mut_bar, nrow = 1, rel_widths = c(1, 2.85))
 #ggsave(plot = mut.estimate.fig, filename = file.path(outdir, "mutation-pop-estimates.pdf"), device=cairo_pdf, units = "in", height = 7, width = 20)
